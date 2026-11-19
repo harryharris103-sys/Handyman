@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Handyman</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f5f1;--sf:#fff;--tx:#1b2a27;--mu:#5d6b67;--br:#0f5c4d;--ac:#c9932e;--ln:#dedcd3;--ok:#1d7a46;--er:#b3392f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121816;--sf:#1b2421;--tx:#ecefed;--mu:#9aa8a3;--br:#3fb59c;--ln:#2e3a36;--ok:#5cc98a;--er:#ef7f74}}
+*{box-sizing:border-box}html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 'Source Sans 3',system-ui,sans-serif}
+h1,h2,h3{font-family:'Bricolage Grotesque',system-ui,sans-serif;margin:0;line-height:1.15}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--br);color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header b{font:800 1.4rem 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em}header b i{color:#f0c566;font-style:normal}
+.roles{margin-left:auto;display:flex;gap:4px;background:rgba(0,0,0,.25);padding:3px;border-radius:99px}
+.roles button{border:0;background:none;color:#fff;padding:6px 12px;border-radius:99px;font:inherit;font-size:.9rem;cursor:pointer}
+.roles button.on{background:#fff;color:#0f5c4d;font-weight:600}
+nav{display:flex;gap:2px;overflow-x:auto;background:var(--sf);border-bottom:1px solid var(--ln);padding:0 8px}
+nav button{border:0;background:none;color:var(--mu);padding:12px 14px;font:600 .95rem 'Source Sans 3',sans-serif;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.on{color:var(--br);border-color:var(--ac)}
+main{max-width:980px;margin:0 auto;padding:16px}
+.demo{background:#fff5dc;color:#5b4310;border:1px solid #ecd28f;border-radius:8px;padding:8px 12px;font-size:.88rem;margin-bottom:14px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px}
+.chip{border:1px solid var(--ln);background:var(--sf);color:var(--tx);border-radius:99px;padding:6px 14px;cursor:pointer;font:inherit;white-space:nowrap}
+.chip.on{background:var(--br);color:#fff;border-color:var(--br)}
+input,select,textarea{width:100%;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--sf);color:var(--tx);font:inherit}
+label{display:block;font-weight:600;font-size:.88rem;margin:10px 0 4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mu{color:var(--mu);font-size:.88rem}
+.btn{border:0;background:var(--br);color:#fff;padding:9px 16px;border-radius:8px;font:600 .95rem 'Source Sans 3',sans-serif;cursor:pointer}
+.btn.ac{background:var(--ac);color:#1b1405}.btn.ln{background:none;color:var(--br);border:1px solid var(--br)}.btn.er{background:var(--er)}
+.btn:focus-visible,.chip:focus-visible,nav button:focus-visible,.roles button:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.tier{font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:99px;background:#eee;color:#333}
+.t-Bronze{background:#e8cdb0}.t-Silver{background:#dfe3e6}.t-Gold{background:#f3d98a}.t-Platinum{background:#cfe9e4}
+.star{color:var(--ac)}
+.steps{display:flex;gap:4px;margin:10px 0}.steps span{flex:1;height:6px;border-radius:3px;background:var(--ln)}.steps span.d{background:var(--br)}
+.tag{font-size:.8rem;font-weight:600;color:var(--br)}.bad{color:var(--er)}
+dialog{border:0;border-radius:12px;max-width:460px;width:calc(100% - 24px);background:var(--sf);color:var(--tx);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.stat .card b{font:800 1.5rem 'Bricolage Grotesque',sans-serif;display:block}
+.hero{margin-bottom:14px}.hero h1{font-size:clamp(1.6rem,5vw,2.4rem);letter-spacing:-.02em}
+.empty{text-align:center;padding:28px;color:var(--mu)}
+</style></head><body>
+<header><b>Handy<i>man</i></b><div class="roles" id="roles"></div></header>
+<nav id="nav"></nav>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+<script>
+const FEE=0.10, CUR='GH₵', CATS=['All','Carpentry','Plumbing','Electrical','Transport','Delivery','Cleaning','Painting','Repairs'];
+const STEPS=['paid','accepted','in_progress','completed'];
+const LBL={pending_payment:'Awaiting payment',paid:'Paid, waiting for handyman',accepted:'Accepted',in_progress:'In progress',completed:'Completed',disputed:'Complaint open',refunded:'Refunded'};
+const seed=()=>({
+ me:{id:'c1',name:'Ama (you)',pts:40},
+ pros:[
+  {id:'p1',name:'Kofi Mensah',cat:'Carpentry',city:'Accra',price:150,bio:'Doors, wardrobes, roofing. 9 yrs.',jobs:48,rsum:223,rn:48,status:'approved',pts:520,docs:'Ghana Card, TVET cert'},
+  {id:'p2',name:'Yaw Boateng',cat:'Transport',city:'Accra',price:60,bio:'Ride hailing and airport runs.',jobs:210,rsum:960,rn:210,status:'approved',pts:1400,docs:'Ghana Card, licence'},
+  {id:'p3',name:'Abena Owusu',cat:'Plumbing',city:'Tema',price:120,bio:'Leaks, tanks, bathroom fittings.',jobs:22,rsum:98,rn:22,status:'approved',pts:260,docs:'Ghana Card'},
+  {id:'p4',name:'Samuel Tetteh',cat:'Electrical',city:'Kumasi',price:140,bio:'Wiring, solar, CCTV.',jobs:5,rsum:21,rn:5,status:'approved',pts:70,docs:'Ghana Card, NVTI cert'},
+  {id:'p5',name:'Efua Quaye',cat:'Cleaning',city:'Accra',price:90,bio:'Home and office deep cleaning.',jobs:0,rsum:0,rn:0,status:'pending',pts:0,docs:'Ghana Card, ref letter'}],
+ orders:[],comps:[],reviews:[],pro:'p1',seq:1});
+let S;try{S=JSON.parse(localStorage.getItem('hm')||'null')}catch(e){}S=S||seed();
+const save=()=>{try{localStorage.setItem('hm',JSON.stringify(S))}catch(e){}};
+let role='customer',tab='find',cat='All',q='';
+const TABS={customer:[['find','Find a handyman'],['orders','My orders'],['merit','My merit']],handyman:[['jobs','My jobs'],['reg','Register'],['earn','Earnings']],admin:[['approve','Approvals'],['disp','Complaints and refunds'],['rev','Revenue']]};
+const tier=p=>p>=1000?'Platinum':p>=400?'Gold':p>=150?'Silver':'Bronze';
+const rate=p=>p.rn?(p.rsum/p.rn).toFixed(1):'New';
+const money=n=>CUR+Number(n).toFixed(2);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pro=id=>S.pros.find(p=>p.id===id);
+function head(){
+ document.getElementById('roles').innerHTML=['customer','handyman','admin'].map(r=>`<button class="${r===role?'on':''}" data-r="${r}">${r[0].toUpperCase()+r.slice(1)}</button>`).join('');
+ document.getElementById('nav').innerHTML=TABS[role].map(t=>`<button class="${t[0]===tab?'on':''}" data-t="${t[0]}">${t[1]}</button>`).join('');
+}
+function stars(p){return `<span class="star">★</span> ${rate(p)} <span class="mu">(${p.rn})</span>`}
+function find(){
+ const list=S.pros.filter(p=>p.status==='approved'&&(cat==='All'||p.cat===cat)&&(p.name+p.bio+p.cat+p.city).toLowerCase().includes(q.toLowerCase())).sort((a,b)=>b.pts-a.pts);
+ return `<div class="hero"><h1>Skilled hands, close to you.</h1><p class="mu">Carpenters, plumbers, drivers and riders. Verified, rated, paid securely.</p></div>
+ <input id="q" placeholder="Search by name, service or area" value="${esc(q)}" aria-label="Search">
+ <div class="chips">${CATS.map(c=>`<button class="chip ${c===cat?'on':''}" data-c="${c}">${c}</button>`).join('')}</div>
+ <div class="grid">${list.map(p=>`<div class="card"><div class="row"><h3>${esc(p.name)}</h3><span class="tier t-${tier(p.pts)}">${tier(p.pts)}</span></div>
+ <div class="mu">${p.cat} · ${p.city}</div><p>${esc(p.bio)}</p><div class="row"><span>${stars(p)}</span><span class="mu">${p.jobs} jobs</span></div>
+ <div class="row" style="margin-top:10px"><b>from ${money(p.price)}</b><span><button class="btn ln" data-prof="${p.id}">Profile</button> <button class="btn" data-book="${p.id}">Book</button></span></div></div>`).join('')||'<div class="empty">No handymen match. Try another service or area.</div>'}</div>`;
+}
+function stepper(o){const i=STEPS.indexOf(o.status);return `<div class="steps">${STEPS.map((s,k)=>`<span class="${k<=i?'d':''}"></span>`).join('')}</div>`}
+function orders(){
+ const l=S.orders.filter(o=>o.cid===S.me.id).reverse();
+ if(!l.length)return '<div class="empty">No orders yet. Find a handyman and book your first job.</div>';
+ return '<div class="grid">'+l.map(o=>{const p=pro(o.pid);return `<div class="card"><div class="row"><h3>${esc(p.name)}</h3><span class="tag ${o.status==='disputed'?'bad':''}">${LBL[o.status]}</span></div>
+ <div class="mu">#${o.id} · ${esc(o.note)}</div>${stepper(o)}<div class="row"><span>${money(o.amt)}</span>
+ <span>${o.status==='pending_payment'?`<button class="btn ac" data-pay="${o.id}">Pay with Paystack</button>`:''}
+ ${o.status==='completed'&&!o.rated?`<button class="btn" data-rate="${o.id}">Rate</button>`:''}
+ ${['paid','accepted','in_progress','completed'].includes(o.status)?`<button class="btn ln" data-comp="${o.id}">Complaint</button>`:''}</span></div></div>`}).join('')+'</div>';
+}
+function merit(){const t=tier(S.me.pts);return `<div class="stat"><div class="card"><b>${S.me.pts}</b>merit points</div><div class="card"><b>${t}</b>customer tier</div></div>
+ <div class="card"><h3>How merit works</h3><p class="mu">Customers earn 10 points for each completed job and 5 for each review. Handymen earn 10 per job plus 5 for each star above 3. Tiers: Bronze, Silver (150), Gold (400), Platinum (1000). Higher tiers rank higher in search; Platinum customers get priority support.</p></div>`}
+function jobs(){
+ const l=S.orders.filter(o=>o.pid===S.pro).reverse();const p=pro(S.pro);
+ return `<div class="stat"><div class="card"><b>${stars(p)}</b>rating</div><div class="card"><b>${tier(p.pts)}</b>${p.pts} points</div></div>
+ <label>Viewing as</label><select id="who">${S.pros.map(x=>`<option value="${x.id}" ${x.id===S.pro?'selected':''}>${esc(x.name)} (${x.status})</option>`).join('')}</select>
+ <h2 style="margin:16px 0 8px">Job history</h2>`+(l.length?'<div class="grid">'+l.map(o=>`<div class="card"><div class="row"><b>#${o.id}</b><span class="tag">${LBL[o.status]}</span></div><p>${esc(o.note)}</p><div class="row"><span>${money(o.amt)}</span><span>
+ ${o.status==='paid'?`<button class="btn" data-adv="${o.id}">Accept</button>`:''}${o.status==='accepted'?`<button class="btn" data-adv="${o.id}">Start job</button>`:''}${o.status==='in_progress'?`<button class="btn ac" data-adv="${o.id}">Mark complete</button>`:''}</span></div></div>`).join('')+'</div>':'<div class="empty">No jobs yet. Approved handymen appear in search.</div>');
+}
+function reg(){return `<div class="card"><h2>Join as a handyman</h2><p class="mu">Submit your details. An admin reviews your ID and certificates before you go live.</p>
+ <label>Full name</label><input id="r_n"><label>Service</label><select id="r_c">${CATS.slice(1).map(c=>`<option>${c}</option>`).join('')}</select>
+ <label>Area</label><input id="r_a" placeholder="e.g. Accra"><label>Starting price (${CUR})</label><input id="r_p" type="number" min="1">
+ <label>About your work</label><textarea id="r_b" rows="2"></textarea>
+ <label>ID type and number</label><input id="r_i" placeholder="Ghana Card, GHA-000000000-0"><label>Certificates (optional)</label><input id="r_f" type="file" multiple>
+ <p style="margin-top:12px"><button class="btn" id="r_go">Submit for approval</button></p></div>`}
+function earn(){
+ const done=S.orders.filter(o=>o.pid===S.pro&&o.status==='completed');const g=done.reduce((a,o)=>a+o.amt,0);
+ return `<div class="stat"><div class="card"><b>${money(g)}</b>gross</div><div class="card"><b>${money(g*FEE)}</b>platform fee (10%)</div><div class="card"><b>${money(g*(1-FEE))}</b>your payout</div></div><p class="mu">Payouts go to your mobile money or bank account after each completed job (Paystack Transfers in production).</p>`}
+function approve(){
+ const l=S.pros.filter(p=>p.status==='pending');
+ return l.length?'<div class="grid">'+l.map(p=>`<div class="card"><h3>${esc(p.name)}</h3><div class="mu">${p.cat} · ${p.city}</div><p>Documents: ${esc(p.docs)}</p><button class="btn" data-ap="${p.id}">Approve and go live</button> <button class="btn er" data-rj="${p.id}">Reject</button></div>`).join('')+'</div>':'<div class="empty">No handymen waiting for approval.</div>'}
+function disp(){
+ return S.comps.length?'<div class="grid">'+S.comps.map(c=>`<div class="card"><div class="row"><b>Order #${c.oid}</b><span class="tag ${c.open?'bad':''}">${c.open?'Open':c.res}</span></div><p>${esc(c.text)}</p>${c.open?`<button class="btn er" data-rf="${c.id}">Refund customer</button> <button class="btn ln" data-dm="${c.id}">Dismiss</button>`:''}</div>`).join('')+'</div>':'<div class="empty">No complaints. Customers raise them from their orders.</div>'}
+function rev(){
+ const d=S.orders.filter(o=>o.status==='completed'),g=d.reduce((a,o)=>a+o.amt,0),r=S.orders.filter(o=>o.status==='refunded').reduce((a,o)=>a+o.amt,0);
+ return `<div class="stat"><div class="card"><b>${money(g*FEE)}</b>commission earned</div><div class="card"><b>${money(g)}</b>completed volume</div><div class="card"><b>${money(r)}</b>refunded</div><div class="card"><b>${S.pros.length}</b>handymen</div></div><p class="mu">Commission rate is ${FEE*100}%. Change it in one place in the code (FEE), or per category later in the database.</p>`}
+const V={find,orders,merit,jobs,reg,earn,approve,disp,rev};
+function render(){head();document.getElementById('app').innerHTML=(role==='customer'&&tab==='find'?'<div class="demo">Demo mode: data stays in this browser and Paystack is simulated. See the handoff report for the live build.</div>':'')+V[tab]();}
+function modal(h){const d=document.getElementById('dlg');d.innerHTML=h+'<p style="margin-top:12px"><button class="btn ln" data-x>Close</button></p>';if(!d.open)d.showModal()}
+const close=()=>document.getElementById('dlg').close();
+function tick(id,fn){const o=S.orders.find(x=>x.id===id);fn(o);save();render()}
+document.addEventListener('click',e=>{
+ const t=e.target.closest('button');if(!t)return;const D=t.dataset;
+ if(D.r){role=D.r;tab=TABS[role][0][0];render()}
+ else if(D.t){tab=D.t;render()}
+ else if(D.c){cat=D.c;render()}
+ else if(D.x!==undefined)close();
+ else if(D.prof){const p=pro(D.prof),rv=S.reviews.filter(r=>r.pid===p.id).slice(-3);modal(`<h2>${esc(p.name)}</h2><p class="mu">${p.cat} · ${p.city} · <span class="tier t-${tier(p.pts)}">${tier(p.pts)}</span></p><p>${esc(p.bio)}</p><p>${stars(p)} · ${p.jobs} completed jobs</p><p class="mu">Verified: ${esc(p.docs)}</p>`+(rv.length?rv.map(r=>`<p>★ ${r.s} ${esc(r.t)}</p>`).join(''):'<p class="mu">No written reviews yet.</p>'))}
+ else if(D.book){const p=pro(D.book);modal(`<h2>Book ${esc(p.name)}</h2><label>What do you need done?</label><textarea id="b_n" rows="3"></textarea><label>Agreed price (${CUR})</label><input id="b_p" type="number" min="1" value="${p.price}"><p class="mu">Includes a ${FEE*100}% platform fee taken from the handyman's payout. You pay the price shown.</p><button class="btn" data-mk="${p.id}">Place order</button>`)}
+ else if(D.mk){const n=document.getElementById('b_n').value.trim(),a=+document.getElementById('b_p').value;if(!n||!(a>0)){alert('Describe the job and enter a price.');return}S.orders.push({id:'H'+String(S.seq++).padStart(4,'0'),cid:S.me.id,pid:D.mk,note:n,amt:a,status:'pending_payment'});save();close();tab='orders';render()}
+ else if(D.pay){const o=S.orders.find(x=>x.id===D.pay);modal(`<h2>Pay ${money(o.amt)}</h2><p class="mu">Simulated Paystack checkout. In production this opens Paystack Popup, and the order only becomes Paid after our server verifies the transaction through a webhook.</p><button class="btn ac" data-paid="${o.id}">Complete test payment</button>`)}
+ else if(D.paid){tick(D.paid,o=>o.status='paid');close()}
+ else if(D.adv){tick(D.adv,o=>{const nx={paid:'accepted',accepted:'in_progress',in_progress:'completed'}[o.status];o.status=nx;if(nx==='completed'){const p=pro(o.pid);p.jobs++;p.pts+=10;S.me.pts+=10}})}
+ else if(D.rate){modal(`<h2>Rate this job</h2><label>Stars</label><select id="s_s">${[5,4,3,2,1].map(n=>`<option>${n}</option>`).join('')}</select><label>Review</label><textarea id="s_t" rows="2"></textarea><p><button class="btn" data-sr="${D.rate}">Submit review</button></p>`)}
+ else if(D.sr){const s=+document.getElementById('s_s').value,tx=document.getElementById('s_t').value.trim();tick(D.sr,o=>{o.rated=1;const p=pro(o.pid);p.rsum+=s;p.rn++;p.pts+=Math.max(0,s-3)*5;S.me.pts+=5;S.reviews.push({pid:p.id,s,t:tx})});close()}
+ else if(D.comp){modal(`<h2>Report a problem</h2><label>What went wrong?</label><textarea id="c_t" rows="3"></textarea><p><button class="btn er" data-cs="${D.comp}">Send complaint and request refund</button></p>`)}
+ else if(D.cs){const tx=document.getElementById('c_t').value.trim();if(!tx){alert('Describe the problem first.');return}S.comps.push({id:'C'+Date.now(),oid:D.cs,text:tx,open:1});tick(D.cs,o=>o.status='disputed');close()}
+ else if(D.ap){pro(D.ap).status='approved';save();render()}
+ else if(D.rj){S.pros=S.pros.filter(p=>p.id!==D.rj);save();render()}
+ else if(D.rf){const c=S.comps.find(x=>x.id===D.rf);c.open=0;c.res='Refunded';S.orders.find(o=>o.id===c.oid).status='refunded';save();render()}
+ else if(D.dm){const c=S.comps.find(x=>x.id===D.dm);c.open=0;c.res='Dismissed';const o=S.orders.find(x=>x.id===c.oid);o.status='completed';save();render()}
+ else if(t.id==='r_go'){const g=i=>document.getElementById(i).value.trim();if(!g('r_n')||!g('r_i')||!(+g('r_p')>0)){alert('Enter your name, ID and a starting price.');return}
+  const f=document.getElementById('r_f').files;S.pros.push({id:'p'+Date.now(),name:g('r_n'),cat:g('r_c'),city:g('r_a')||'Accra',price:+g('r_p'),bio:g('r_b'),jobs:0,rsum:0,rn:0,status:'pending',pts:0,docs:g('r_i').split(',')[0]+(f.length?', '+f.length+' file(s)':'')});save();alert('Submitted. An admin will review your documents.');role='admin';tab='approve';render()}
+});
+document.addEventListener('input',e=>{if(e.target.id==='q'){q=e.target.value;const p=e.target.selectionStart;render();const i=document.getElementById('q');i.focus();i.setSelectionRange(p,p)}});
+document.addEventListener('change',e=>{if(e.target.id==='who'){S.pro=e.target.value;render()}});
+render();
+</script></body></html>
