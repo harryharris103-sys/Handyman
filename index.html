@@ -42,36 +42,47 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .stat .card b{font:800 1.5rem 'Bricolage Grotesque',sans-serif;display:block}
 .hero{margin-bottom:14px}.hero h1{font-size:clamp(1.6rem,5vw,2.4rem);letter-spacing:-.02em}
 .empty{text-align:center;padding:28px;color:var(--mu)}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--ln);white-space:nowrap}
+.meter{height:6px;background:var(--ln);border-radius:3px;margin:2px 0 8px}.meter i{display:block;height:100%;background:var(--ac);border-radius:3px}
+header button[data-out]{border:1px solid #fff8;background:none;color:#fff;border-radius:99px;padding:5px 12px;cursor:pointer;font:inherit;font-size:.85rem}
+#inv td:last-child,#inv th:last-child{text-align:right}#inv td{white-space:normal}
+@media print{body>*:not(dialog){display:none!important}dialog{position:static;border:0}[data-x],[data-prt]{display:none}}
 </style></head><body>
 <header><b>Handy<i>man</i></b><div class="roles" id="roles"></div></header>
 <nav id="nav"></nav>
 <main id="app"></main>
 <dialog id="dlg"></dialog>
 <script>
-const FEE=0.10, CUR='GH₵', CATS=['All','Carpentry','Plumbing','Electrical','Transport','Delivery','Cleaning','Painting','Repairs'];
+let FEE=0.10;const h=s=>{let x=5381;for(const c of s)x=(x*33^c.charCodeAt(0))>>>0;return x.toString(36)};const CUR='GH₵', CATS=['All','Carpentry','Plumbing','Electrical','Transport','Delivery','Cleaning','Painting','Repairs'];
 const STEPS=['paid','accepted','in_progress','completed'];
 const LBL={pending_payment:'Awaiting payment',paid:'Paid, waiting for handyman',accepted:'Accepted',in_progress:'In progress',completed:'Completed',disputed:'Complaint open',refunded:'Refunded'};
 const seed=()=>({
- me:{id:'c1',name:'Ama (you)',pts:40},
+ cfg:{fee:10,name:'Handyman',addr:'Accra, Ghana',phone:'',email:'',tin:'',tax:0,prefix:'HM',terms:'Payment is made at booking and held securely until the job is completed.',foot:'Thank you for choosing Handyman.'},
+ users:[{id:'a1',role:'admin',name:'Super Admin',ident:'admin@handyman.app',pw:h('admin123')},
+  ...[['c1','Ama Serwaa','ama'],['c2','Kwesi Appiah','kwesi'],['c3','Naana Addo','naana']].map((c,i)=>({id:c[0],role:'customer',name:c[1],ident:c[2]+'@handyman.app',pw:h('demo123'),pts:40,at:Date.now()-(20-i*3)*864e5,active:1}))],
  pros:[
   {id:'p1',name:'Kofi Mensah',cat:'Carpentry',city:'Accra',price:150,bio:'Doors, wardrobes, roofing. 9 yrs.',jobs:48,rsum:223,rn:48,status:'approved',pts:520,docs:'Ghana Card, TVET cert'},
   {id:'p2',name:'Yaw Boateng',cat:'Transport',city:'Accra',price:60,bio:'Ride hailing and airport runs.',jobs:210,rsum:960,rn:210,status:'approved',pts:1400,docs:'Ghana Card, licence'},
   {id:'p3',name:'Abena Owusu',cat:'Plumbing',city:'Tema',price:120,bio:'Leaks, tanks, bathroom fittings.',jobs:22,rsum:98,rn:22,status:'approved',pts:260,docs:'Ghana Card'},
   {id:'p4',name:'Samuel Tetteh',cat:'Electrical',city:'Kumasi',price:140,bio:'Wiring, solar, CCTV.',jobs:5,rsum:21,rn:5,status:'approved',pts:70,docs:'Ghana Card, NVTI cert'},
   {id:'p5',name:'Efua Quaye',cat:'Cleaning',city:'Accra',price:90,bio:'Home and office deep cleaning.',jobs:0,rsum:0,rn:0,status:'pending',pts:0,docs:'Ghana Card, ref letter'}],
- orders:[],comps:[],reviews:[],pro:'p1',seq:1});
-let S;try{S=JSON.parse(localStorage.getItem('hm')||'null')}catch(e){}S=S||seed();
+ orders:[],comps:[],reviews:[],seq:1,log:[],sess:null});
+let S;try{S=JSON.parse(localStorage.getItem('hm')||'null')}catch(e){}S=S&&S.users?S:seed();
+if(!S.gen){S.gen=1;S.pros.forEach(p=>S.users.push({id:'u'+p.id,role:'handyman',pid:p.id,name:p.name,ident:p.name.split(' ')[0].toLowerCase()+'@handyman.app',pw:h('demo123'),pts:0,at:Date.now()-25*864e5,active:1}));
+ const ap=S.pros.filter(p=>p.status==='approved'),cs=S.users.filter(u=>u.role==='customer');
+ for(let i=0;i<36;i++){const p=ap[i%ap.length],c=cs[i%cs.length];S.orders.push({id:'H'+String(S.seq++).padStart(4,'0'),cid:c.id,pid:p.id,note:p.cat+' job',amt:Math.round(p.price*(1+(i%4)*.3)),status:i%11==0?'refunded':i%7==0?'in_progress':'completed',at:Date.now()-i*0.4*864e5,rated:1})}}
+Object.defineProperty(S,'me',{get(){return S.users.find(u=>u.id===S.sess)}});Object.defineProperty(S,'pro',{get(){return S.me&&S.me.pid}});FEE=S.cfg.fee/100;
 const save=()=>{try{localStorage.setItem('hm',JSON.stringify(S))}catch(e){}};
 let role='customer',tab='find',cat='All',q='';
-const TABS={customer:[['find','Find a handyman'],['orders','My orders'],['merit','My merit']],handyman:[['jobs','My jobs'],['reg','Register'],['earn','Earnings']],admin:[['approve','Approvals'],['disp','Complaints and refunds'],['rev','Revenue']]};
+const TABS={customer:[['find','Find a handyman'],['orders','My orders'],['merit','My merit']],handyman:[['jobs','My jobs'],['earn','Earnings']],admin:[['ov','Overview'],['users','Users'],['approve','Approvals'],['disp','Complaints'],['fin','Finance'],['inv','Invoices'],['cfg','Settings']]};
 const tier=p=>p>=1000?'Platinum':p>=400?'Gold':p>=150?'Silver':'Bronze';
 const rate=p=>p.rn?(p.rsum/p.rn).toFixed(1):'New';
 const money=n=>CUR+Number(n).toFixed(2);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pro=id=>S.pros.find(p=>p.id===id);
 function head(){
- document.getElementById('roles').innerHTML=['customer','handyman','admin'].map(r=>`<button class="${r===role?'on':''}" data-r="${r}">${r[0].toUpperCase()+r.slice(1)}</button>`).join('');
- document.getElementById('nav').innerHTML=TABS[role].map(t=>`<button class="${t[0]===tab?'on':''}" data-t="${t[0]}">${t[1]}</button>`).join('');
+ role=S.me?S.me.role:'';document.getElementById('roles').innerHTML=S.me?`<span style="color:#fff;padding:0 8px;font-size:.9rem">${esc(S.me.name)} · ${role}</span><button data-out>Sign out</button>`:'';
+ document.getElementById('nav').innerHTML=(TABS[role]||[]).map(t=>`<button class="${t[0]===tab?'on':''}" data-t="${t[0]}">${t[1]}</button>`).join('');
 }
 function stars(p){return `<span class="star">★</span> ${rate(p)} <span class="mu">(${p.rn})</span>`}
 function find(){
@@ -98,7 +109,7 @@ function merit(){const t=tier(S.me.pts);return `<div class="stat"><div class="ca
 function jobs(){
  const l=S.orders.filter(o=>o.pid===S.pro).reverse();const p=pro(S.pro);
  return `<div class="stat"><div class="card"><b>${stars(p)}</b>rating</div><div class="card"><b>${tier(p.pts)}</b>${p.pts} points</div></div>
- <label>Viewing as</label><select id="who">${S.pros.map(x=>`<option value="${x.id}" ${x.id===S.pro?'selected':''}>${esc(x.name)} (${x.status})</option>`).join('')}</select>
+ ${p.status!=='approved'?'<div class="demo">Your account is waiting for admin approval. You will appear in search once approved.</div>':''}
  <h2 style="margin:16px 0 8px">Job history</h2>`+(l.length?'<div class="grid">'+l.map(o=>`<div class="card"><div class="row"><b>#${o.id}</b><span class="tag">${LBL[o.status]}</span></div><p>${esc(o.note)}</p><div class="row"><span>${money(o.amt)}</span><span>
  ${o.status==='paid'?`<button class="btn" data-adv="${o.id}">Accept</button>`:''}${o.status==='accepted'?`<button class="btn" data-adv="${o.id}">Start job</button>`:''}${o.status==='in_progress'?`<button class="btn ac" data-adv="${o.id}">Mark complete</button>`:''}</span></div></div>`).join('')+'</div>':'<div class="empty">No jobs yet. Approved handymen appear in search.</div>');
 }
@@ -119,8 +130,50 @@ function disp(){
 function rev(){
  const d=S.orders.filter(o=>o.status==='completed'),g=d.reduce((a,o)=>a+o.amt,0),r=S.orders.filter(o=>o.status==='refunded').reduce((a,o)=>a+o.amt,0);
  return `<div class="stat"><div class="card"><b>${money(g*FEE)}</b>commission earned</div><div class="card"><b>${money(g)}</b>completed volume</div><div class="card"><b>${money(r)}</b>refunded</div><div class="card"><b>${S.pros.length}</b>handymen</div></div><p class="mu">Commission rate is ${FEE*100}%. Change it in one place in the code (FEE), or per category later in the database.</p>`}
-const V={find,orders,merit,jobs,reg,earn,approve,disp,rev};
-function render(){head();document.getElementById('app').innerHTML=(role==='customer'&&tab==='find'?'<div class="demo">Demo mode: data stays in this browser and Paystack is simulated. See the handoff report for the live build.</div>':'')+V[tab]();}
+let authMode='in',authErr='';
+function auth(){const su=authMode==='up';return `<div class="card" style="max-width:420px;margin:24px auto"><h1 style="font-size:1.8rem">${su?'Create your account':'Welcome back'}</h1><p class="mu">Use your email or phone number.</p>
+${authErr?`<p class="bad" role="alert">${esc(authErr)}</p>`:''}
+${su?'<label>Full name</label><input id="au_n" autocomplete="name"><label>I want to</label><select id="au_t"><option value="customer">Hire handymen</option><option value="handyman">Offer my services</option></select>':''}
+<label>Email or phone number</label><input id="au_i" autocomplete="username"><label>Password</label><input id="au_p" type="password" autocomplete="${su?'new':'current'}-password">
+${su?`<div id="au_h" hidden><label>Service</label><select id="au_c">${CATS.slice(1).map(c=>`<option>${c}</option>`).join('')}</select><label>Area</label><input id="au_a"><label>Starting price (${CUR})</label><input id="au_pr" type="number" min="1"><label>ID type and number</label><input id="au_d" placeholder="Ghana Card, GHA-000000000-0"><label>Certificates (optional)</label><input type="file" multiple><p class="mu">An admin checks your documents before you go live.</p></div>`:''}
+<p style="margin-top:14px"><button class="btn" id="au_go">${su?'Create account':'Sign in'}</button> <button class="btn ln" data-am="${su?'in':'up'}">${su?'I have an account':'Create account'}</button></p>
+${su?'':'<p class="mu">Demo logins, password demo123: ama@handyman.app (customer), kofi@handyman.app (handyman). Admin: admin@handyman.app, password admin123.</p>'}</div>`}
+const fmtD=t=>new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short'}),HELD=['paid','accepted','in_progress','disputed'],uname=id=>(S.users.find(u=>u.id===id)||{name:'?'}).name;
+const kp=(v,l)=>`<div class="card"><b>${v}</b>${l}</div>`;
+function bars(v,l,f){const m=Math.max(...v,1),w=300/v.length;return `<svg viewBox="0 0 300 110" role="img" aria-label="Bar chart" style="width:100%">${v.map((x,i)=>`<rect x="${i*w+2}" y="${90-x/m*80}" width="${w-4}" height="${x/m*80}" rx="2" fill="var(--br)"><title>${l[i]}: ${f(x)}</title></rect>`).join('')}<text x="0" y="106" font-size="8" fill="var(--mu)">${l[0]}</text><text x="300" y="106" text-anchor="end" font-size="8" fill="var(--mu)">${l[l.length-1]}</text></svg>`}
+function ov(){
+ const done=S.orders.filter(o=>o.status==='completed'),gmv=done.reduce((a,o)=>a+o.amt,0),ref=S.orders.filter(o=>o.status==='refunded').reduce((a,o)=>a+o.amt,0),wk=Date.now()-7*864e5;
+ const days=[...Array(14)].map((_,i)=>Math.floor(Date.now()/864e5)-13+i),lb=days.map(d=>fmtD(d*864e5));
+ const rv=days.map(d=>done.filter(o=>Math.floor(o.at/864e5)===d).reduce((a,o)=>a+o.amt*FEE,0)),us=days.map(d=>S.users.filter(u=>Math.floor((u.at||0)/864e5)===d).length);
+ const cats={};done.forEach(o=>{const c=pro(o.pid).cat;cats[c]=(cats[c]||0)+o.amt});const ce=Object.entries(cats).sort((a,b)=>b[1]-a[1]),mx=ce.length?ce[0][1]:1;
+ const rp=S.pros.filter(p=>p.rn),avg=rp.length?rp.reduce((a,p)=>a+p.rsum,0)/rp.reduce((a,p)=>a+p.rn,0):0,paid=S.orders.filter(o=>o.status!=='pending_payment'&&o.status!=='cancelled').length;
+ const hm=S.users.filter(u=>u.role==='handyman');
+ return `<div class="stat">${kp(money(gmv*FEE),'commission earned')}${kp(money(gmv),'completed job value')}${kp(money(ref),'refunded')}${kp(S.orders.length,'total orders')}${kp(done.length?money(gmv/done.length):'-','average order')}${kp(avg.toFixed(2),'average rating')}</div>
+ <div class="stat">${kp(S.users.filter(u=>u.role==='customer').length,'customers')}${kp(hm.filter(u=>pro(u.pid).status==='approved').length+' of '+hm.length,'handymen live')}${kp(S.users.filter(u=>u.at>wk).length,'new users, 7 days')}${kp(S.comps.filter(c=>c.open).length,'open complaints')}${kp(S.pros.filter(p=>p.status==='pending').length,'awaiting approval')}${kp(paid?Math.round(done.length/paid*100)+'%':'-','paid orders completed')}</div>
+ <div class="grid"><div class="card"><h3>Commission, last 14 days</h3>${bars(rv,lb,money)}</div><div class="card"><h3>New users, last 14 days</h3>${bars(us,lb,n=>n)}</div>
+ <div class="card"><h3>Job value by service</h3>${ce.map(([c,v])=>`<div class="row mu"><span>${c}</span><span>${money(v)}</span></div><div class="meter"><i style="width:${v/mx*100}%"></i></div>`).join('')||'<p class="mu">No completed jobs yet.</p>'}</div></div>`}
+function users(){
+ const rows=S.users.filter(u=>u.role!=='admin').map(u=>{const p=u.pid&&pro(u.pid),os=S.orders.filter(o=>(p?o.pid===p.id:o.cid===u.id)&&o.status==='completed'),v=os.reduce((a,o)=>a+o.amt,0);
+ return `<tr><td>${esc(u.name)}</td><td>${esc(u.ident)}</td><td>${u.role}${p?' ('+p.status+')':''}</td><td>${fmtD(u.at)}</td><td>${os.length}</td><td>${money(p?v*(1-FEE):v)}</td><td>${u.active===0?'Suspended':'Active'}</td><td><button class="btn ln" data-sus="${u.id}">${u.active===0?'Reactivate':'Suspend'}</button></td></tr>`}).join('');
+ return `<p class="mu">Customers show money spent; handymen show payout earned.</p><div class="tw"><table><thead><tr><th>Name</th><th>Contact</th><th>Role</th><th>Joined</th><th>Jobs</th><th>Spent or earned</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+function fin(){
+ const sm=f=>S.orders.filter(f).reduce((a,o)=>a+o.amt,0),g=sm(o=>o.status==='completed');
+ const rows=S.orders.slice(-30).reverse().map(o=>`<tr><td>${fmtD(o.at)}</td><td>#${o.id}</td><td>${esc(uname(o.cid))}</td><td>${esc(pro(o.pid).name)}</td><td>${money(o.amt)}</td><td>${money(o.status==='completed'?o.amt*FEE:0)}</td><td>${LBL[o.status]}</td></tr>`).join('');
+ return `<div class="stat">${kp(money(g),'gross completed')}${kp(money(g*FEE),'commission ('+FEE*100+'%)')}${kp(money(g*(1-FEE)),'payable to handymen')}${kp(money(sm(o=>HELD.includes(o.status))),'held in escrow')}${kp(money(sm(o=>o.status==='refunded')),'refunded')}</div>
+ <h2 style="margin-bottom:8px">Latest transactions</h2><div class="tw"><table><thead><tr><th>Date</th><th>Order</th><th>Customer</th><th>Handyman</th><th>Amount</th><th>Commission</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`}
+const invNo=o=>`${S.cfg.prefix}-${new Date(o.at).getFullYear()}-${o.id.slice(1)}`;
+function inv(){
+ const rows=S.orders.filter(o=>o.status==='completed').reverse().map(o=>`<tr><td>${invNo(o)}</td><td>${fmtD(o.at)}</td><td>${esc(uname(o.cid))}</td><td>${esc(pro(o.pid).name)}</td><td>${money(o.amt)}</td><td><button class="btn ln" data-invw="${o.id}">View</button></td></tr>`).join('');
+ return `<p class="mu">An invoice is created for every completed job. Business details, tax rate, numbering and terms come from Settings.</p><div class="tw"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Handyman</th><th>Total</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`}
+function cfg(){const c=S.cfg,f=(i,l,v,t)=>`<label>${l}</label><input id="${i}" value="${esc(v)}" ${t||''}>`;
+ return `<div class="grid"><div class="card"><h3>Business and invoices</h3>${f('cf_name','Business name',c.name)}${f('cf_addr','Address',c.addr)}${f('cf_ph','Phone',c.phone)}${f('cf_em','Email',c.email)}${f('cf_tin','Tax ID (TIN)',c.tin)}${f('cf_pre','Invoice prefix',c.prefix)}${f('cf_tax','Tax included in prices (%)',c.tax,'type="number" min="0"')}${f('cf_te','Payment terms',c.terms)}${f('cf_fo','Invoice footer',c.foot)}</div>
+ <div class="card"><h3>Commission</h3>${f('cf_fee','Platform commission (%)',c.fee,'type="number" min="0" max="50"')}<p class="mu">Applies to every job. In production the rate is saved on each order so past figures never change.</p><p><button class="btn" id="cf_go">Save settings</button></p>
+ <h3 style="margin-top:16px">Admin activity</h3>${S.log.slice(-8).reverse().map(l=>`<p class="mu">${fmtD(l.at)} · ${esc(l.by)}: ${esc(l.a)}</p>`).join('')||'<p class="mu">No activity yet.</p>'}<p><button class="btn er" data-reset>Reset demo data</button></p></div></div>`}
+const V={find,orders,merit,jobs,earn,approve,disp,ov,users,fin,inv,cfg};
+function render(){head();const a=document.getElementById('app');if(!S.me){a.innerHTML=auth();return}
+ if(S.me.active===0){a.innerHTML='<div class="empty">This account is suspended. Contact support.</div>';return}
+ if(!TABS[role].some(t=>t[0]===tab))tab=TABS[role][0][0];
+ a.innerHTML=(tab==='find'?'<div class="demo">Demo mode: data stays in this browser and Paystack is simulated. See the handoff report for the live build.</div>':'')+V[tab]()}
 function modal(h){const d=document.getElementById('dlg');d.innerHTML=h+'<p style="margin-top:12px"><button class="btn ln" data-x>Close</button></p>';if(!d.open)d.showModal()}
 const close=()=>document.getElementById('dlg').close();
 function tick(id,fn){const o=S.orders.find(x=>x.id===id);fn(o);save();render()}
@@ -132,22 +185,41 @@ document.addEventListener('click',e=>{
  else if(D.x!==undefined)close();
  else if(D.prof){const p=pro(D.prof),rv=S.reviews.filter(r=>r.pid===p.id).slice(-3);modal(`<h2>${esc(p.name)}</h2><p class="mu">${p.cat} · ${p.city} · <span class="tier t-${tier(p.pts)}">${tier(p.pts)}</span></p><p>${esc(p.bio)}</p><p>${stars(p)} · ${p.jobs} completed jobs</p><p class="mu">Verified: ${esc(p.docs)}</p>`+(rv.length?rv.map(r=>`<p>★ ${r.s} ${esc(r.t)}</p>`).join(''):'<p class="mu">No written reviews yet.</p>'))}
  else if(D.book){const p=pro(D.book);modal(`<h2>Book ${esc(p.name)}</h2><label>What do you need done?</label><textarea id="b_n" rows="3"></textarea><label>Agreed price (${CUR})</label><input id="b_p" type="number" min="1" value="${p.price}"><p class="mu">Includes a ${FEE*100}% platform fee taken from the handyman's payout. You pay the price shown.</p><button class="btn" data-mk="${p.id}">Place order</button>`)}
- else if(D.mk){const n=document.getElementById('b_n').value.trim(),a=+document.getElementById('b_p').value;if(!n||!(a>0)){alert('Describe the job and enter a price.');return}S.orders.push({id:'H'+String(S.seq++).padStart(4,'0'),cid:S.me.id,pid:D.mk,note:n,amt:a,status:'pending_payment'});save();close();tab='orders';render()}
+ else if(D.mk){const n=document.getElementById('b_n').value.trim(),a=+document.getElementById('b_p').value;if(!n||!(a>0)){alert('Describe the job and enter a price.');return}S.orders.push({id:'H'+String(S.seq++).padStart(4,'0'),cid:S.me.id,pid:D.mk,note:n,amt:a,status:'pending_payment',at:Date.now()});save();close();tab='orders';render()}
  else if(D.pay){const o=S.orders.find(x=>x.id===D.pay);modal(`<h2>Pay ${money(o.amt)}</h2><p class="mu">Simulated Paystack checkout. In production this opens Paystack Popup, and the order only becomes Paid after our server verifies the transaction through a webhook.</p><button class="btn ac" data-paid="${o.id}">Complete test payment</button>`)}
  else if(D.paid){tick(D.paid,o=>o.status='paid');close()}
- else if(D.adv){tick(D.adv,o=>{const nx={paid:'accepted',accepted:'in_progress',in_progress:'completed'}[o.status];o.status=nx;if(nx==='completed'){const p=pro(o.pid);p.jobs++;p.pts+=10;S.me.pts+=10}})}
+ else if(D.adv){tick(D.adv,o=>{const nx={paid:'accepted',accepted:'in_progress',in_progress:'completed'}[o.status];o.status=nx;if(nx==='completed'){const p=pro(o.pid);p.jobs++;p.pts+=10;const cu=S.users.find(u=>u.id===o.cid);if(cu)cu.pts+=10}})}
  else if(D.rate){modal(`<h2>Rate this job</h2><label>Stars</label><select id="s_s">${[5,4,3,2,1].map(n=>`<option>${n}</option>`).join('')}</select><label>Review</label><textarea id="s_t" rows="2"></textarea><p><button class="btn" data-sr="${D.rate}">Submit review</button></p>`)}
  else if(D.sr){const s=+document.getElementById('s_s').value,tx=document.getElementById('s_t').value.trim();tick(D.sr,o=>{o.rated=1;const p=pro(o.pid);p.rsum+=s;p.rn++;p.pts+=Math.max(0,s-3)*5;S.me.pts+=5;S.reviews.push({pid:p.id,s,t:tx})});close()}
  else if(D.comp){modal(`<h2>Report a problem</h2><label>What went wrong?</label><textarea id="c_t" rows="3"></textarea><p><button class="btn er" data-cs="${D.comp}">Send complaint and request refund</button></p>`)}
  else if(D.cs){const tx=document.getElementById('c_t').value.trim();if(!tx){alert('Describe the problem first.');return}S.comps.push({id:'C'+Date.now(),oid:D.cs,text:tx,open:1});tick(D.cs,o=>o.status='disputed');close()}
- else if(D.ap){pro(D.ap).status='approved';save();render()}
+ else if(D.ap){pro(D.ap).status='approved';S.log.push({at:Date.now(),by:S.me.name,a:'Approved '+pro(D.ap).name});save();render()}
  else if(D.rj){S.pros=S.pros.filter(p=>p.id!==D.rj);save();render()}
- else if(D.rf){const c=S.comps.find(x=>x.id===D.rf);c.open=0;c.res='Refunded';S.orders.find(o=>o.id===c.oid).status='refunded';save();render()}
+ else if(D.rf){const c=S.comps.find(x=>x.id===D.rf);c.open=0;c.res='Refunded';S.log.push({at:Date.now(),by:S.me.name,a:'Refunded order #'+c.oid});S.orders.find(o=>o.id===c.oid).status='refunded';save();render()}
  else if(D.dm){const c=S.comps.find(x=>x.id===D.dm);c.open=0;c.res='Dismissed';const o=S.orders.find(x=>x.id===c.oid);o.status='completed';save();render()}
+ else if(D.am){authMode=D.am;authErr='';render()}
+ else if(D.out!==undefined){S.sess=null;save();render()}
+ else if(D.prt!==undefined)window.print();
+ else if(D.reset!==undefined){try{localStorage.removeItem('hm')}catch(e){}location.reload()}
+ else if(D.sus){const u=S.users.find(x=>x.id===D.sus);u.active=u.active===0?1:0;S.log.push({at:Date.now(),by:S.me.name,a:(u.active?'Reactivated ':'Suspended ')+u.name});save();render()}
+ else if(D.invw){const o=S.orders.find(x=>x.id===D.invw),p=pro(o.pid),c=S.cfg,tx=o.amt-o.amt/(1+c.tax/100);
+  modal(`<div id="inv"><div class="row"><h2>${esc(c.name)}</h2><b>INVOICE</b></div><p class="mu">${esc(c.addr)}<br>${esc(c.phone)} ${esc(c.email)}${c.tin?'<br>TIN: '+esc(c.tin):''}</p><div class="row"><span>${invNo(o)}<br><span class="mu">Order #${o.id}</span></span><span>${new Date(o.at).toLocaleDateString('en-GB')}</span></div><p><b>Bill to:</b> ${esc(uname(o.cid))}</p><table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>${esc(p.cat)} service by ${esc(p.name)}: ${esc(o.note)}</td><td>${money(o.amt-tx)}</td></tr>${c.tax>0?`<tr><td>Tax (${c.tax}%)</td><td>${money(tx)}</td></tr>`:''}<tr><td><b>Total paid</b></td><td><b>${money(o.amt)}</b></td></tr></tbody></table><p class="mu">${esc(c.terms)}</p><p>${esc(c.foot)}</p></div><p><button class="btn" data-prt>Print or save as PDF</button></p>`)}
+ else if(t.id==='cf_go'){const g=i=>document.getElementById(i).value.trim(),f=+g('cf_fee');if(!(f>=0&&f<=50)){alert('Commission must be between 0 and 50.');return}
+  S.cfg={fee:f,name:g('cf_name')||'Handyman',addr:g('cf_addr'),phone:g('cf_ph'),email:g('cf_em'),tin:g('cf_tin'),tax:+g('cf_tax')||0,prefix:g('cf_pre')||'HM',terms:g('cf_te'),foot:g('cf_fo')};FEE=f/100;S.log.push({at:Date.now(),by:S.me.name,a:'Updated settings'});save();alert('Settings saved.');render()}
+ else if(t.id==='au_go'){const g=i=>(document.getElementById(i)||{value:''}).value.trim(),er=m=>{authErr=m;render()};
+  const id=g('au_i').toLowerCase().replace(/\s/g,''),pw=document.getElementById('au_p').value;
+  if(!/^\S+@\S+\.\S+$/.test(id)&&!/^\+?\d{9,15}$/.test(id))return er('Enter a valid email or phone number.');
+  if(pw.length<6)return er('Password must be at least 6 characters.');
+  if(authMode==='in'){const u=S.users.find(x=>x.ident===id&&x.pw===h(pw));if(!u)return er('Wrong email, phone or password.');S.sess=u.id}
+  else{if(S.users.some(x=>x.ident===id))return er('That email or phone is already registered.');const nm=g('au_n'),ty=g('au_t');if(!nm)return er('Enter your name.');
+   const u={id:'u'+Date.now(),role:ty,name:nm,ident:id,pw:h(pw),pts:0,at:Date.now(),active:1};
+   if(ty==='handyman'){if(!g('au_d')||!(+g('au_pr')>0))return er('Enter your ID details and a starting price.');u.pid='p'+Date.now();S.pros.push({id:u.pid,name:nm,cat:g('au_c'),city:g('au_a')||'Accra',price:+g('au_pr'),bio:'',jobs:0,rsum:0,rn:0,status:'pending',pts:0,docs:g('au_d')})}
+   S.users.push(u);S.sess=u.id}
+  authErr='';tab='';save();render()}
  else if(t.id==='r_go'){const g=i=>document.getElementById(i).value.trim();if(!g('r_n')||!g('r_i')||!(+g('r_p')>0)){alert('Enter your name, ID and a starting price.');return}
   const f=document.getElementById('r_f').files;S.pros.push({id:'p'+Date.now(),name:g('r_n'),cat:g('r_c'),city:g('r_a')||'Accra',price:+g('r_p'),bio:g('r_b'),jobs:0,rsum:0,rn:0,status:'pending',pts:0,docs:g('r_i').split(',')[0]+(f.length?', '+f.length+' file(s)':'')});save();alert('Submitted. An admin will review your documents.');role='admin';tab='approve';render()}
 });
 document.addEventListener('input',e=>{if(e.target.id==='q'){q=e.target.value;const p=e.target.selectionStart;render();const i=document.getElementById('q');i.focus();i.setSelectionRange(p,p)}});
-document.addEventListener('change',e=>{if(e.target.id==='who'){S.pro=e.target.value;render()}});
+document.addEventListener('change',e=>{if(e.target.id==='au_t')document.getElementById('au_h').hidden=e.target.value!=='handyman'});
 render();
 </script></body></html>
