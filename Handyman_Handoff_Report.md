@@ -1,7 +1,8 @@
-# Handyman: Handoff Report (v0.2 prototype)
+# Handyman: Handoff Report (v0.3 prototype)
 
 ## 1. Where we are
 - `handyman.html` is a working front-end prototype with sign-in/sign-up (email or phone + password) and three role-based areas: Customer, Handyman and Admin (superuser control board). Data lives in the browser only (localStorage) and Paystack is simulated.
+- v0.3 adds: commission and fee-payer rules per category, transport hailing for Ghana with admin-managed areas, invoices with platform-fee and tax lines, account verification, password reset and a 5-attempt lockout, CSV/Excel export, date filters and handyman commission statements. Notifications are deliberately not included (see section 9).
 - Demo logins (password `demo123`): `ama@handyman.app` (customer), `kofi@handyman.app` (handyman). Admin: `admin@handyman.app` / `admin123`. Remove these before any real launch.
 - It proves the flows and screens. It is **not yet safe for real money or real ID documents**: that needs the backend in section 3.
 
@@ -19,10 +20,14 @@
 | Login and sign-up with email or phone, role-based access | Done (demo only: passwords use a toy hash in the browser) |
 | Admin control board: overview metrics, users, approvals, complaints, finance ledger | Done (prototype) |
 | Invoicing: numbered invoice per completed job, business details, tax, terms, print/PDF | Done (prototype) |
-| Admin settings: commission rate, invoice details, activity log | Done |
+| Admin settings: invoice details, Paystack fee %, tax %, activity log | Done |
+| Commission % and who pays the Paystack processing fee, set per category (rates saved on each order) | Done |
+| Transport hailing: ride booking (taxi, motorbike, tricycle), fare by distance, driver accepts, tracked like any order; admin adds/edits/turns off areas | Done (fares typed by distance, no maps or live GPS) |
+| Invoices show a separate platform-fee line and the tax rate | Done |
+| Email/phone verification, password reset, lock after 5 wrong attempts | Done (demo: the code is shown on screen; nothing is sent) |
+| CSV and Excel export, date filters, handyman commission statements | Done |
 | Mobile-friendly, light/dark | Done |
-| Real authentication (phone/email codes, password reset), secure database, real Paystack, notifications, maps | **Not built** (sections 3 to 5) |
-| Export (CSV/Excel), date-range filters, handyman commission statements | **Not built** (section 10) |
+| Real code sending, server-side authentication, secure database, real Paystack, maps and live GPS | **Not built** (sections 3 to 5) |
 
 ## 3. Recommended production stack
 - **Supabase** (hosted PostgreSQL + Auth + Storage + Row Level Security). Fast to launch, scales well, and lets us keep security rules inside the database.
@@ -128,6 +133,28 @@ create table invoices (
   issued_at timestamptz default now()
 );
 create sequence invoice_seq;
+
+-- v0.3: per-category fees, snapshot of rates on each order, transport areas
+alter table categories add column fee_payer text not null default 'platform' check (fee_payer in ('platform','handyman','customer'));
+alter table app_settings add column processing_pct numeric(4,2) not null default 1.95;  -- check the Paystack dashboard
+alter table orders
+  add column category_id int references categories(id),
+  add column commission_pct numeric(4,2), add column fee_payer text, add column processing_pct numeric(4,2),
+  add column processing_fee numeric(10,2) default 0,
+  add column kind text not null default 'job' check (kind in ('job','ride')),
+  add column area_id int, add column pickup text, add column dropoff text, add column distance_km numeric(6,1);
+create table areas (
+  id serial primary key, name text unique not null, region text,
+  base_fare numeric(8,2) not null, per_km numeric(8,2) not null, min_fare numeric(8,2) not null default 0,
+  active boolean not null default true
+);
+alter table orders add foreign key (area_id) references areas(id);
+alter table providers add column area_id int references areas(id);
+create table login_attempts (identifier text primary key, fails int not null default 0, locked_until timestamptz);
+alter table areas enable row level security;
+create policy "areas readable" on areas for select using (active or is_admin());
+create policy "areas admin write" on areas for all using (is_admin()) with check (is_admin());
+alter table login_attempts enable row level security;   -- no policies: only server functions touch it
 create index on orders (customer_id), (provider_id), (status);
 create index on providers (category_id, status);
 
@@ -173,6 +200,12 @@ Status changes on `orders` (paid, completed, refunded) must happen **only** thro
 - Handyman sign-up creates a `providers` row with status `pending`; they stay hidden from search until an admin approves.
 - Suspended users (`profiles.active = false`) are blocked by policy and by the server functions.
 
+**v0.3 security rules** (prototype behaviour, to be enforced on the server):
+- New accounts must verify the 6-digit code (valid 10 minutes) sent by SMS or email before first sign-in. Supabase Auth does this natively; for SMS use a provider that covers Ghana.
+- Password reset sends a code to the registered email or phone. Passwords need 8 characters or more.
+- After 5 wrong passwords an identifier is locked for 15 minutes (`login_attempts`, checked by an Edge Function before sign-in). The prototype also locks unknown identifiers; keep that to stop guessing of which accounts exist.
+- Never reveal whether an email or phone is registered in the sign-in error message.
+
 ### 4b. Admin control board
 Metrics in the prototype and where they come from in production:
 - Commission, job value, refunds, average order, escrow held: `orders` and `payments`.
@@ -184,6 +217,23 @@ Build these as SQL **views** or functions callable only by admins, so the heavy 
 - An invoice is issued by a server function when an order becomes `completed`: number from `invoice_seq` with the prefix and year from settings, tax split from the price (prices include tax), and a snapshot of the business details saved on the invoice.
 - Show it as printable HTML first; later generate a PDF on the server and email or SMS the link to the customer.
 - Check Ghana tax rules (VAT and levies, GRA e-invoicing if it applies to you) with your accountant before setting the tax rate.
+
+### 4d. Commission and fee model (per category)
+- Each category has a commission % and a "processing fee payer" (platform, handyman or customer). The Paystack processing % lives in settings.
+- When an order is created the server copies these three values onto the order, so later changes only affect new orders.
+- Per order: commission = amount x commission %; processing fee = amount x processing %. If the customer pays the fee it is added to their charge; if the handyman pays it comes off their payout; if the platform pays it comes off the commission. Net revenue = commission minus any fee the platform absorbs.
+- Verify the real Paystack Ghana fee structure (cards vs mobile money may differ) before choosing defaults.
+
+### 4e. Transport hailing (Ghana)
+- Areas (city and region, base fare, per-km rate, minimum fare) are rows in `areas`; admins add, edit and turn them off without code changes. The starting values in the prototype (Accra, Tema, Kumasi, Takoradi, Cape Coast, Tamale) are placeholders, not researched fares.
+- Vehicle types: taxi, motorbike (okada), tricycle, with a fare multiplier. Fare = max(minimum, (base + per-km x distance) x multiplier).
+- Flow: customer requests and pays, the ride appears to approved Transport handymen in the same area, the first to accept gets it, then it follows the normal order stages and rating.
+- Not in the prototype and needed for a real service: live GPS, route and distance from a maps provider (Google Maps or Mapbox), driver availability and matching, cancellations and no-show rules, safety features (trip sharing, SOS), driver vehicle and licence checks, and the transport regulations for Ghana (check with the relevant authorities before launch).
+
+### 4f. Exports and statements
+- CSV and Excel exports: transactions, invoices, users, and per-handyman commission statements, all filtered by the selected date range. In production, generate large exports on the server.
+- Cells starting with =, +, - or @ are escaped to prevent spreadsheet formula injection.
+- A statement lists each completed job with amount, rate, commission, processing fee charged to the handyman and payout, with totals.
 
 ## 5. Paystack integration plan (for now; keep it behind one module so it can be swapped)
 1. Customer places order, server creates it as `pending_payment` and calls Paystack **Initialize Transaction** (amount in pesewas, currency GHS, order ref in metadata).
@@ -210,25 +260,30 @@ Build these as SQL **views** or functions callable only by admins, so the heavy 
 
 ## 8. Roadmap (updated)
 1. **Phase 1 (4 to 6 weeks)**: Supabase project and the schema above, real auth (phone OTP + email), connect this UI to the database, KYC upload to the private bucket, admin approval, admin metrics as views, invoice function, Paystack test mode end to end.
-2. **Phase 2**: live Paystack, payouts, notifications (SMS/WhatsApp/push), in-app chat, photos on jobs.
-3. **Phase 3**: transport hailing (live location, fare estimate, driver matching), scheduled jobs, PWA install, mobile apps, multi-city.
+2. **Phase 2**: live Paystack, payouts, in-app chat, photos on jobs, and notifications only if you decide to include them (section 9).
+3. **Phase 3**: transport upgrades (maps, live GPS, driver matching, safety features), scheduled jobs, PWA install, mobile apps, more areas.
 
-## 9. Decisions needed from you
-1. Commission: flat 10% or per category? Who pays Paystack fees, you or the handyman?
-2. Escrow release: customer confirmation only, or auto-release after N hours?
-3. Refund policy and dispute time limits.
-4. Launch city and first 3 categories (focus makes launch easier than "everything at once").
-5. Transport hailing is a separate, heavier product (live tracking, regulation). Treat it as Phase 3.
+## 9. Decisions still needed from you
+1. **Escrow release:** pay the handyman only when the customer confirms, or automatically after N hours? (Rides usually release at trip end.)
+2. **Refunds:** refund policy and dispute time limits, including cancellation fees for rides.
+3. **Launch:** first city and first three service categories (transport is already built for the six starter areas).
+4. **Real values:** default commission % per category, who pays the processing fee in each, the tax rate, and the base fare, per-km rate and minimum fare for each area. The prototype uses placeholders (10% commission, platform pays fees, 0% tax).
+5. **Notifications:** you wrote "no notifications". I left them out and show verification codes on screen in the demo. A live app cannot send codes without SMS or email sending, so please confirm whether that sending is allowed while other notifications (order updates) stay out.
+6. **Platform fee on invoices:** I show it as an included line (taken from the handyman's payout). Should it instead be added on top of the customer's bill?
+7. **Transport rules:** do drivers need extra documents (vehicle registration, driver's licence, insurance) before approval?
 
 ## 10. Known gaps in this prototype
 - Admin checks happen only in the browser. In production every admin action must be enforced on the server (RLS and `is_admin()`).
-- No password reset, no email/phone verification, no rate limiting.
-- Certificates chosen at sign-up are not uploaded or stored.
-- Changing the commission rate recalculates past figures; fix by storing the rate on each order.
-- No CSV/Excel export, date-range filters, handyman commission statements, or notifications.
+- Login, verification codes, password reset and the 5-attempt lockout run in the browser with a toy password hash. Real sending of codes by SMS or email and server-side enforcement are needed.
+- Certificates and vehicle documents chosen at sign-up are not uploaded or stored.
+- Transport has no maps, live GPS, driver matching, cancellations, tipping or safety features. Distance is typed in by the customer.
+- Excel and CSV downloads need the viewer to approve a save prompt, and depend on the hosting page allowing downloads.
+- No real database (Supabase) and no live Paystack or payouts yet.
+- No notifications (by your instruction), no in-app chat, no dispute evidence uploads.
 
 ## 11. Notes for the next developer or Claude session
-- Single source of truth for the prototype is `handyman.html`. Constants `CATS`, `CUR` are at the top of the script; commission is `S.cfg.fee` (copied to `FEE`); tier thresholds are in `tier()`.
-- Structure: `S` is the whole state (users, pros, orders, comps, reviews, cfg, log, sess). Views are functions in the `V` object (customer: `find`, `orders`, `merit`; handyman: `jobs`, `earn`; admin: `ov`, `users`, `approve`, `disp`, `fin`, `inv`, `cfg`). All clicks go through one handler using `data-*` attributes.
-- `rev()` and `reg()` are leftover functions from v0.1 and can be deleted.
-- To go live, replace the `S` state object and `save()` with Supabase calls and replace the "Complete test payment" button with the Paystack Popup flow in section 5.
+- Single source of truth for the prototype is `handyman.html`. `S` is the whole state (users, pros, orders, comps, reviews, cats, areas, cfg, log, fails, codes, sess). Views are functions in the `V` object (customer: `find`, `ride`, `orders`, `merit`; handyman: `jobs`, `rides`, `earn`, `stmt`; admin: `ov`, `users`, `approve`, `disp`, `fin`, `stmt`, `inv`, `areas`, `cfg`). All clicks go through one handler using `data-*` attributes.
+- Money rules live in one function, `calc(order)`. Orders store `rate`, `payer` and `ps` (processing %) at creation; always read those, never the current settings, for past orders.
+- Exports: `rowsFor(kind)` builds the table, `exp(kind, format)` saves it using the `downloads` capability; the page is published with that capability declared. Excel uses SheetJS 0.18.5 from cdnjs.
+- Auth state machine: `authMode` is `in`, `up`, `verify`, `forgot` or `reset`; `sendCode()` shows the demo code on screen.
+- Ride flow: `ride()` and the `rd_go` / `rq` handlers create an order with `kind` ride and no handyman; `take` assigns the first eligible Transport driver in the same area.
